@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/scroll"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipToPadding="false"
+    android:fillViewport="true"
+    android:overScrollMode="never"
+    android:scrollbars="none">
+
+    <LinearLayout
+        android:id="@+id/content"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Tiêu đề -->
+        <TextView
+            style="@style/Glass.Label"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:text="Đồng hồ nổi"
+            android:textSize="30sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvVersion"
+            style="@style/Glass.Hint"
+            android:layout_marginStart="8dp"
+            android:layout_marginBottom="16dp"
+            android:text="by Minh Thái"
+            android:textSize="15sp" />
+
+        <!-- Bật / tắt + quyền -->
+        <LinearLayout style="@style/Glass.Card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/Glass.Label"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="Bật đồng hồ nổi" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/swMain"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:thumbIcon="@null"
+                    app:thumbTint="@color/switch_thumb"
+                    app:trackDecorationTint="@android:color/transparent"
+                    app:trackTint="@color/switch_track" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvPerm"
+                style="@style/Glass.Hint"
+                android:text="" />
+
+            <TextView
+                android:id="@+id/btnPerm"
+                style="@style/Glass.Button"
+                android:text="Cấp quyền hiển thị trên ứng dụng khác"
+                android:visibility="gone" />
+
+            <TextView
+                style="@style/Glass.Hint"
+                android:text="Mẹo: nhấn giữ vào đồng hồ để mở bảng chỉnh nhanh (màu, cỡ chữ, ẩn đồng hồ). Kéo để di chuyển." />
+        </LinearLayout>
+
+        <!-- Báo thức nhấp nháy -->
+        <LinearLayout style="@style/Glass.Card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/Glass.Label"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="Báo thức nhấp nháy đồng hồ" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/swAlarm"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:thumbIcon="@null"
+                    app:thumbTint="@color/switch_thumb"
+                    app:trackDecorationTint="@android:color/transparent"
+                    app:trackTint="@color/switch_track" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/btnAlarmTime"
+                style="@style/Glass.Button"
+                android:text="Giờ báo thức: 07:00" />
+
+            <EditText
+                android:id="@+id/etNote"
+                style="@style/Glass.Button"
+                android:background="@drawable/glass_input"
+                android:gravity="center_vertical"
+                android:hint="Nhập ghi chú nhắc việc (VD: Đến giờ uống thuốc)"
+                android:imeOptions="actionDone"
+                android:importantForAutofill="no"
+                android:inputType="textCapSentences|textMultiLine"
+                android:maxLines="3"
+                android:textColorHint="@color/white_60" />
+
+            <TextView
+                style="@style/Glass.Hint"
+                android:text="Đến giờ hẹn, đồng hồ sẽ nhấp nháy kèm nội dung ghi chú. Chạm 1 lần vào đồng hồ để tắt nhấp nháy." />
+        </LinearLayout>
+
+        <!-- Màu chữ -->
+        <LinearLayout style="@style/Glass.Card">
+
+            <TextView
+                style="@style/Glass.Label"
+                android:text="Màu chữ" />
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/colorRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+        </LinearLayout>
+
+        <!-- Kiểu chữ -->
+        <LinearLayout style="@style/Glass.Card">
+
+            <TextView
+                android:id="@+id/tvSize"
+                style="@style/Glass.Label"
+                android:text="Cỡ chữ: 22 sp" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderSize"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:stepSize="1"
+                android:value="22"
+                android:valueFrom="10"
+                android:valueTo="60"
+                app:haloColor="#33FFFFFF"
+                app:labelBehavior="gone"
+                app:thumbColor="#FFFFFFFF"
+                app:thumbElevation="0dp"
+                app:trackColorActive="#FFFFFFFF"
+                app:trackColorInactive="#55FFFFFF"
+                app:trackHeight="4dp" />
+
+            <TextView
+                android:id="@+id/tvOpacity"
+                style="@style/Glass.Label"
+                android:layout_marginTop="8dp"
+                android:text="Độ đậm: 100%" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderOpacity"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:stepSize="5"
+                android:value="100"
+                android:valueFrom="20"
+                android:valueTo="100"
+                app:haloColor="#33FFFFFF"
+                app:labelBehavior="gone"
+                app:thumbColor="#FFFFFFFF"
+                app:thumbElevation="0dp"
+                app:trackColorActive="#FFFFFFFF"
+                app:trackColorInactive="#55FFFFFF"
+                app:trackHeight="4dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/Glass.Label"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="Hiện giây"
+                    android:textSize="17sp" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/swSeconds"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:thumbIcon="@null"
+                    app:thumbTint="@color/switch_thumb"
+                    app:trackDecorationTint="@android:color/transparent"
+                    app:trackTint="@color/switch_track" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvBlur"
+                    style="@style/Glass.Label"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="Làm mờ nền phía sau (Android 12+)"
+                    android:textSize="17sp" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/swBlur"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:thumbIcon="@null"
+                    app:thumbTint="@color/switch_thumb"
+                    app:trackDecorationTint="@android:color/transparent"
+                    app:trackTint="@color/switch_track" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Tối ưu Xiaomi / HyperOS -->
+        <LinearLayout style="@style/Glass.Card">
+
+            <TextView
+                style="@style/Glass.Label"
+                android:text="Tối ưu cho Xiaomi / HyperOS" />
+
+            <TextView
+                style="@style/Glass.Hint"
+                android:text="HyperOS rất hay dọn app chạy nền. Làm cả 4 bước dưới đây để đồng hồ không tự biến mất." />
+
+            <TextView
+                android:id="@+id/btnBattery"
+                style="@style/Glass.Button"
+                android:text="1. Pin: Không hạn chế" />
+
+            <TextView
+                android:id="@+id/btnAutostart"
+                style="@style/Glass.Button"
+                android:text="2. Bật Tự khởi động" />
+
+            <TextView
+                android:id="@+id/btnPopup"
+                style="@style/Glass.Button"
+                android:text="3. Cho phép cửa sổ pop-up khi chạy nền" />
+
+            <TextView
+                android:id="@+id/btnLock"
+                style="@style/Glass.Button"
+                android:text="4. Khóa app trong đa nhiệm" />
+        </LinearLayout>
+
+        <!-- Cập nhật OTA -->
+        <LinearLayout style="@style/Glass.Card">
+
+            <TextView
+                style="@style/Glass.Label"
+                android:text="Cập nhật (GitHub)" />
+
+            <TextView
+                android:id="@+id/tvUpdate"
+                style="@style/Glass.Hint"
+                android:text="" />
+
+            <ProgressBar
+                android:id="@+id/progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:max="100"
+                android:progressTint="@color/white"
+                android:progressBackgroundTint="#55FFFFFF"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/btnUpdate"
+                style="@style/Glass.Button"
+                android:text="Kiểm tra cập nhật" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/Glass.Hint"
+            android:layout_marginBottom="8dp"
+            android:gravity="center"
+            android:text="Đồng hồ nổi · by Minh Thái" />
+    </LinearLayout>
+</ScrollView>

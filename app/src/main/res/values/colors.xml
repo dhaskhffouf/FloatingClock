@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="white">#FFFFFFFF</color>
+    <color name="white_90">#E6FFFFFF</color>
+    <color name="white_60">#99FFFFFF</color>
+    <color name="teal">#FF00897B</color>
+    <color name="grad_top">#FF4F6BF0</color>
+    <color name="grad_mid">#FF9A5BE0</color>
+    <color name="grad_bottom">#FFF058B0</color>
+</resources>
