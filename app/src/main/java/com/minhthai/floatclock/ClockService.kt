@@ -53,7 +53,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 
 /**
- * Dịch vụ nền hiển thị đồng hồ nổi (overlay) kiểu soft glass trong nhẹ.
+ * Dịch vụ nền hiển thị đồng hồ nổi (overlay) sắc nét, tùy chỉnh độ mờ kính từ 0..100%.
  *  - Kéo để di chuyển (khung tự co dãn theo nội dung khi bật/tắt giây), chạm 1 lần để tắt nhấp nháy.
  *  - Nhấn giữ để mở bảng chỉnh nhanh; bấm "Cài đặt" để mở bảng cài đặt nổi mà vẫn thấy app bên dưới.
  */
@@ -189,16 +189,29 @@ class ClockService : Service() {
     private fun dp(v: Float) = (v * dm.density).toInt()
 
     private fun applyGlassBackground(view: View, cornerDp: Float, alphaPct: Int) {
-        val alphaInt = (alphaPct * 255 / 100).coerceIn(35, 235)
+        val clampedPct = alphaPct.coerceIn(0, 100)
         val bg = view.background as? GradientDrawable ?: GradientDrawable().also {
             view.background = it
         }
         bg.cornerRadius = dp(cornerDp).toFloat()
-        bg.setColor(ColorUtils.setAlphaComponent(0x181C28.toInt(), alphaInt))
-        bg.setStroke(
-            dp(1f),
-            ColorUtils.setAlphaComponent(Color.WHITE, (alphaInt * 0.65f).toInt().coerceIn(45, 190))
-        )
+        if (clampedPct == 0) {
+            bg.setColor(Color.TRANSPARENT)
+            bg.setStroke(0, Color.TRANSPARENT)
+        } else {
+            val alphaInt = (clampedPct * 255 / 100).coerceIn(1, 235)
+            bg.setColor(ColorUtils.setAlphaComponent(0x181C28.toInt(), alphaInt))
+            bg.setStroke(
+                dp(1f),
+                ColorUtils.setAlphaComponent(Color.WHITE, (alphaInt * 0.65f).toInt().coerceIn(20, 190))
+            )
+        }
+    }
+
+    private fun clearBlur(lp: WindowManager.LayoutParams) {
+        if (Build.VERSION.SDK_INT >= 31) {
+            lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+            lp.blurBehindRadius = 0
+        }
     }
 
     private fun ensureChip() {
@@ -209,7 +222,7 @@ class ClockService : Service() {
         val root = LinearLayout(themed).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(18f), dp(8f), dp(18f), dp(8f))
+            setPadding(dp(14f), dp(6f), dp(14f), dp(6f))
             background = GradientDrawable()
         }
         val time = TextClock(themed).apply {
@@ -263,21 +276,20 @@ class ClockService : Service() {
 
         applyGlassBackground(c, 22f, prefs.glassAlpha)
 
-        val alpha = (prefs.opacity * 255 / 100).coerceIn(51, 255)
+        val alpha = (prefs.opacity * 255 / 100).coerceIn(77, 255)
         val color = ColorUtils.setAlphaComponent(prefs.color, alpha)
         val size = prefs.size.toFloat()
-        val shadow = if (ColorUtils.calculateLuminance(prefs.color) > 0.5) 0x99000000.toInt() else 0x99FFFFFF.toInt()
 
         val fmt = if (prefs.seconds) "HH:mm:ss" else "HH:mm"
         tv.format24Hour = fmt
         tv.format12Hour = fmt
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
         tv.setTextColor(color)
-        tv.setShadowLayer(6f, 0f, 1f, shadow)
+        tv.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
 
         nv.setTextSize(TypedValue.COMPLEX_UNIT_SP, max(11f, size * 0.55f))
         nv.setTextColor(color)
-        nv.setShadowLayer(6f, 0f, 1f, shadow)
+        nv.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         nv.text = activeAlarmNote
         nv.visibility = if (blinkAnim != null && activeAlarmNote.isNotBlank()) View.VISIBLE else View.GONE
 
@@ -290,14 +302,6 @@ class ClockService : Service() {
             lp.y = lp.y.coerceIn(0, max(0, dm.heightPixels - c.height))
             clearBlur(lp)
             runCatching { wm.updateViewLayout(c, lp) }
-        }
-    }
-
-    /** Không làm mờ toàn màn hình phía sau khi điều chỉnh. */
-    private fun clearBlur(lp: WindowManager.LayoutParams) {
-        if (Build.VERSION.SDK_INT >= 31) {
-            lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
-            lp.blurBehindRadius = 0
         }
     }
 
@@ -455,12 +459,15 @@ class ClockService : Service() {
 
         val tvGlass = v.findViewById<TextView>(R.id.tvPanelGlass)
         val sGlass = v.findViewById<Slider>(R.id.sliderPanelGlass)
-        sGlass.value = prefs.glassAlpha.toFloat().coerceIn(20f, 100f)
-        tvGlass.text = "Độ trong kính: ${prefs.glassAlpha}%"
+        sGlass.valueFrom = 0f
+        sGlass.valueTo = 100f
+        sGlass.stepSize = 5f
+        sGlass.value = prefs.glassAlpha.toFloat().coerceIn(0f, 100f)
+        tvGlass.text = "Độ mờ kính: ${prefs.glassAlpha}%"
         sGlass.addOnChangeListener { _, value, fromUser ->
             if (fromUser) {
                 prefs.glassAlpha = value.toInt()
-                tvGlass.text = "Độ trong kính: ${value.toInt()}%"
+                tvGlass.text = "Độ mờ kính: ${value.toInt()}%"
                 applyGlassBackground(v, 20f, prefs.glassAlpha)
                 chip?.let { applyGlassBackground(it, 22f, prefs.glassAlpha) }
                 bumpPanelTimer()

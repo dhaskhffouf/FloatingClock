@@ -26,12 +26,12 @@ class Prefs(ctx: Context) {
         set(v) = sp.edit().putInt(K_SIZE, v).apply()
 
     var opacity: Int
-        get() = sp.getInt(K_OPACITY, 90)
+        get() = sp.getInt(K_OPACITY, 100)
         set(v) = sp.edit().putInt(K_OPACITY, v).apply()
 
     var glassAlpha: Int
-        get() = sp.getInt(K_GLASS_ALPHA, 65)
-        set(v) = sp.edit().putInt(K_GLASS_ALPHA, v.coerceIn(20, 100)).apply()
+        get() = sp.getInt(K_GLASS_ALPHA, 0)
+        set(v) = sp.edit().putInt(K_GLASS_ALPHA, v.coerceIn(0, 100)).apply()
 
     var color: Int
         get() = sp.getInt(K_COLOR, Color.WHITE)
@@ -42,7 +42,7 @@ class Prefs(ctx: Context) {
         set(v) = sp.edit().putBoolean(K_SECONDS, v).apply()
 
     var blur: Boolean
-        get() = sp.getBoolean(K_BLUR, true)
+        get() = sp.getBoolean(K_BLUR, false)
         set(v) = sp.edit().putBoolean(K_BLUR, v).apply()
 
     var x: Int

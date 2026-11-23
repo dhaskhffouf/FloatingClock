@@ -39,7 +39,7 @@
         android:id="@+id/tvPanelSize"
         style="@style/Glass.Label"
         android:layout_marginTop="6dp"
-        android:text="Cỡ chữ: 22 sp"
+        android:text="Cỡ chữ: 28 sp"
         android:textSize="13sp" />
 
     <com.google.android.material.slider.Slider
@@ -47,7 +47,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:stepSize="1"
-        android:value="22"
+        android:value="28"
         android:valueFrom="10"
         android:valueTo="60"
         app:haloColor="#33FFFFFF"
@@ -83,7 +83,7 @@
     <TextView
         android:id="@+id/tvPanelGlass"
         style="@style/Glass.Label"
-        android:text="Độ trong kính: 65%"
+        android:text="Độ mờ kính: 0%"
         android:textSize="13sp" />
 
     <com.google.android.material.slider.Slider
@@ -91,8 +91,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:stepSize="5"
-        android:value="65"
-        android:valueFrom="20"
+        android:value="0"
+        android:valueFrom="0"
         android:valueTo="100"
         app:haloColor="#33FFFFFF"
         app:labelBehavior="gone"
