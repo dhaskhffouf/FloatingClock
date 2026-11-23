@@ -2,56 +2,45 @@ package com.minhthai.floatclock
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Color
+import org.json.JSONArray
+import org.json.JSONObject
 
-/** Toàn bộ cài đặt của app. Service lắng nghe thay đổi nên chỉnh là thấy ngay (live preview). */
-class Prefs(context: Context) {
+data class AlarmItem(
+    val id: String,
+    var enabled: Boolean,
+    var hour: Int,
+    var minute: Int,
+    var note: String
+)
 
-    val sp: SharedPreferences =
-        context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+class Prefs(ctx: Context) {
+    val sp: SharedPreferences = ctx.getSharedPreferences("float_clock", Context.MODE_PRIVATE)
 
     var enabled: Boolean
         get() = sp.getBoolean(K_ENABLED, false)
         set(v) = sp.edit().putBoolean(K_ENABLED, v).apply()
 
-    var alarmOn: Boolean
-        get() = sp.getBoolean(K_ALARM_ON, false)
-        set(v) = sp.edit().putBoolean(K_ALARM_ON, v).apply()
-
-    var alarmH: Int
-        get() = sp.getInt(K_ALARM_H, 7)
-        set(v) = sp.edit().putInt(K_ALARM_H, v).apply()
-
-    var alarmM: Int
-        get() = sp.getInt(K_ALARM_M, 0)
-        set(v) = sp.edit().putInt(K_ALARM_M, v).apply()
-
-    var note: String
-        get() = sp.getString(K_NOTE, "") ?: ""
-        set(v) = sp.edit().putString(K_NOTE, v).apply()
-
-    var color: Int
-        get() = sp.getInt(K_COLOR, 0xFFFFFFFF.toInt())
-        set(v) = sp.edit().putInt(K_COLOR, v).apply()
-
-    /** Cỡ chữ (sp) 10..60 */
     var size: Int
-        get() = sp.getInt(K_SIZE, 22)
+        get() = sp.getInt(K_SIZE, 28)
         set(v) = sp.edit().putInt(K_SIZE, v).apply()
 
-    /** "Độ đậm" = độ rõ của chữ, 20..100 (%) */
     var opacity: Int
-        get() = sp.getInt(K_OPACITY, 100)
+        get() = sp.getInt(K_OPACITY, 90)
         set(v) = sp.edit().putInt(K_OPACITY, v).apply()
 
-    var blur: Boolean
-        get() = sp.getBoolean(K_BLUR, false)
-        set(v) = sp.edit().putBoolean(K_BLUR, v).apply()
+    var color: Int
+        get() = sp.getInt(K_COLOR, Color.WHITE)
+        set(v) = sp.edit().putInt(K_COLOR, v).apply()
 
     var seconds: Boolean
         get() = sp.getBoolean(K_SECONDS, false)
         set(v) = sp.edit().putBoolean(K_SECONDS, v).apply()
 
-    /** Vị trí đồng hồ (px). -1 = chưa đặt, dùng mặc định. */
+    var blur: Boolean
+        get() = sp.getBoolean(K_BLUR, true)
+        set(v) = sp.edit().putBoolean(K_BLUR, v).apply()
+
     var x: Int
         get() = sp.getInt(K_X, -1)
         set(v) = sp.edit().putInt(K_X, v).apply()
@@ -60,37 +49,138 @@ class Prefs(context: Context) {
         get() = sp.getInt(K_Y, -1)
         set(v) = sp.edit().putInt(K_Y, v).apply()
 
-    var lastUpdateCheck: Long
+    var lastCheck: Long
         get() = sp.getLong(K_LAST_CHECK, 0L)
         set(v) = sp.edit().putLong(K_LAST_CHECK, v).apply()
 
+    var lastUpdateCheck: Long
+        get() = sp.getLong(K_LAST_UPDATE_CHECK, lastCheck)
+        set(v) {
+            sp.edit()
+                .putLong(K_LAST_UPDATE_CHECK, v)
+                .putLong(K_LAST_CHECK, v)
+                .apply()
+        }
+
+    var alarmOn: Boolean
+        get() = getAlarms().any { it.enabled }
+        set(v) {
+            val list = getAlarms()
+            if (list.isEmpty()) {
+                list.add(AlarmItem("alarm_1", v, 7, 0, ""))
+                saveAlarms(list)
+            } else {
+                list[0].enabled = v
+                saveAlarms(list)
+            }
+        }
+
+    var alarmH: Int
+        get() = getAlarms().firstOrNull()?.hour ?: 7
+        set(v) {
+            val list = getAlarms()
+            if (list.isEmpty()) {
+                list.add(AlarmItem("alarm_1", true, v.coerceIn(0, 23), 0, ""))
+            } else {
+                list[0].hour = v.coerceIn(0, 23)
+            }
+            saveAlarms(list)
+        }
+
+    var alarmM: Int
+        get() = getAlarms().firstOrNull()?.minute ?: 0
+        set(v) {
+            val list = getAlarms()
+            if (list.isEmpty()) {
+                list.add(AlarmItem("alarm_1", true, 7, v.coerceIn(0, 59), ""))
+            } else {
+                list[0].minute = v.coerceIn(0, 59)
+            }
+            saveAlarms(list)
+        }
+
+    var note: String
+        get() = getAlarms().firstOrNull()?.note ?: ""
+        set(v) {
+            val list = getAlarms()
+            if (list.isEmpty()) {
+                list.add(AlarmItem("alarm_1", false, 7, 0, v))
+            } else {
+                list[0].note = v
+            }
+            saveAlarms(list)
+        }
+
+    fun getAlarms(): MutableList<AlarmItem> {
+        val raw = sp.getString(K_ALARMS_JSON, null)
+        if (raw == null) {
+            val oldOn = sp.getBoolean(K_ALARM_ON, false)
+            val oldH = sp.getInt(K_ALARM_H, 7)
+            val oldM = sp.getInt(K_ALARM_M, 0)
+            val oldNote = sp.getString(K_NOTE, "") ?: ""
+            val initial = if (oldOn || oldNote.isNotBlank() || sp.contains(K_ALARM_H)) {
+                mutableListOf(AlarmItem("alarm_1", oldOn, oldH, oldM, oldNote))
+            } else {
+                mutableListOf()
+            }
+            saveAlarms(initial)
+            return initial
+        }
+
+        val list = mutableListOf<AlarmItem>()
+        runCatching {
+            val arr = JSONArray(raw)
+            for (i in 0 until arr.length()) {
+                if (list.size >= MAX_ALARMS) break
+                val o = arr.getJSONObject(i)
+                list.add(
+                    AlarmItem(
+                        id = o.optString("id", "alarm_${i + 1}"),
+                        enabled = o.optBoolean("enabled", true),
+                        hour = o.optInt("hour", 7).coerceIn(0, 23),
+                        minute = o.optInt("minute", 0).coerceIn(0, 59),
+                        note = o.optString("note", "")
+                    )
+                )
+            }
+        }
+        return list
+    }
+
+    fun saveAlarms(alarms: List<AlarmItem>) {
+        val arr = JSONArray()
+        alarms.take(MAX_ALARMS).forEach { item ->
+            arr.put(
+                JSONObject().apply {
+                    put("id", item.id)
+                    put("enabled", item.enabled)
+                    put("hour", item.hour.coerceIn(0, 23))
+                    put("minute", item.minute.coerceIn(0, 59))
+                    put("note", item.note)
+                }
+            )
+        }
+        sp.edit().putString(K_ALARMS_JSON, arr.toString()).apply()
+    }
+
     companion object {
-        const val FILE = "floatclock_prefs"
+        const val MAX_ALARMS = 5
+
         const val K_ENABLED = "enabled"
+        const val K_SIZE = "size"
+        const val K_OPACITY = "opacity"
+        const val K_COLOR = "color"
+        const val K_SECONDS = "seconds"
+        const val K_BLUR = "blur"
+        const val K_X = "x"
+        const val K_Y = "y"
+        const val K_LAST_CHECK = "last_check"
+        const val K_LAST_UPDATE_CHECK = "last_update_check"
+
+        const val K_ALARMS_JSON = "alarms_json"
         const val K_ALARM_ON = "alarm_on"
         const val K_ALARM_H = "alarm_h"
         const val K_ALARM_M = "alarm_m"
         const val K_NOTE = "note"
-        const val K_COLOR = "color"
-        const val K_SIZE = "size"
-        const val K_OPACITY = "opacity"
-        const val K_BLUR = "blur"
-        const val K_SECONDS = "seconds"
-        const val K_X = "x"
-        const val K_Y = "y"
-        const val K_LAST_CHECK = "last_check"
-
-        val PALETTE: IntArray = intArrayOf(
-            0xFFFFFFFF.toInt(), // trắng
-            0xFF000000.toInt(), // đen
-            0xFFFF5252.toInt(), // đỏ
-            0xFFFFC107.toInt(), // vàng
-            0xFF4CAF50.toInt(), // xanh lá
-            0xFF00BCD4.toInt(), // xanh ngọc
-            0xFF448AFF.toInt(), // xanh dương
-            0xFFE040FB.toInt(), // tím
-            0xFFFF4081.toInt(), // hồng
-            0xFFFF9800.toInt()  // cam
-        )
     }
 }

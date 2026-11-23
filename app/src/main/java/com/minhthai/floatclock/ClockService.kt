@@ -36,13 +36,11 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextClock
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -50,6 +48,7 @@ import androidx.core.graphics.ColorUtils
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import java.util.Calendar
+import java.util.UUID
 import kotlin.math.hypot
 import kotlin.math.max
 
@@ -72,7 +71,8 @@ class ClockService : Service() {
     private var noteView: TextView? = null
     private var chipLp: WindowManager.LayoutParams? = null
     private var blinkAnim: ObjectAnimator? = null
-    private var lastFiredKey: String? = null
+    private var activeAlarmNote: String = ""
+    private val firedKeys = mutableSetOf<String>()
 
     // ---- Bảng chỉnh nhanh & bảng cài đặt nổi ----
     private var panel: View? = null
@@ -80,8 +80,11 @@ class ClockService : Service() {
 
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
-            Prefs.K_X, Prefs.K_Y, Prefs.K_ENABLED, Prefs.K_LAST_CHECK -> Unit
-            Prefs.K_ALARM_ON, Prefs.K_ALARM_H, Prefs.K_ALARM_M -> scheduleAlarm(this)
+            Prefs.K_X, Prefs.K_Y, Prefs.K_ENABLED, Prefs.K_LAST_CHECK, Prefs.K_LAST_UPDATE_CHECK -> Unit
+            Prefs.K_ALARMS_JSON, Prefs.K_ALARM_ON, Prefs.K_ALARM_H, Prefs.K_ALARM_M -> {
+                scheduleAlarm(this)
+                applyStyle()
+            }
             else -> applyStyle()
         }
     }
@@ -263,8 +266,8 @@ class ClockService : Service() {
         nv.setTextSize(TypedValue.COMPLEX_UNIT_SP, max(11f, size * 0.55f))
         nv.setTextColor(color)
         nv.setShadowLayer(6f, 0f, 1f, shadow)
-        nv.text = prefs.note
-        nv.visibility = if (blinkAnim != null && prefs.note.isNotBlank()) View.VISIBLE else View.GONE
+        nv.text = activeAlarmNote
+        nv.visibility = if (blinkAnim != null && activeAlarmNote.isNotBlank()) View.VISIBLE else View.GONE
 
         c.requestLayout()
         c.post {
@@ -345,17 +348,30 @@ class ClockService : Service() {
         }
     }
 
-    // ------------------------------------------------------------------ Báo thức nhấp nháy
+    // ------------------------------------------------------------------ 5 Báo thức nhấp nháy
 
     private fun checkAlarm() {
-        if (!prefs.alarmOn) return
+        val alarms = prefs.getAlarms().filter { it.enabled }
+        if (alarms.isEmpty()) return
+
         val now = Calendar.getInstance()
         val nowMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        val target = prefs.alarmH * 60 + prefs.alarmM
-        val key = "${now.get(Calendar.YEAR)}-${now.get(Calendar.DAY_OF_YEAR)}-$target"
-        if (nowMin - target in 0..2 && key != lastFiredKey) {
-            lastFiredKey = key
-            startBlink()
+        val dayStamp = "${now.get(Calendar.YEAR)}-${now.get(Calendar.DAY_OF_YEAR)}"
+
+        if (firedKeys.size > 40) {
+            firedKeys.removeAll { !it.startsWith(dayStamp) }
+        }
+
+        for (alarm in alarms) {
+            val target = alarm.hour * 60 + alarm.minute
+            val key = "$dayStamp-${alarm.id}-$target"
+            if (nowMin - target in 0..2 && key !in firedKeys) {
+                firedKeys.add(key)
+                activeAlarmNote = alarm.note
+                startBlink()
+                scheduleAlarm(this)
+                break
+            }
         }
     }
 
@@ -379,6 +395,7 @@ class ClockService : Service() {
         if (blinkAnim == null) return
         blinkAnim?.cancel()
         blinkAnim = null
+        activeAlarmNote = ""
         chip?.alpha = 1f
         applyStyle()
     }
@@ -470,7 +487,7 @@ class ClockService : Service() {
         panel = null
     }
 
-    // ------------------------------------------------------------------ Bảng cài đặt nổi (thấy ứng dụng bên dưới)
+    // ------------------------------------------------------------------ Bảng cài đặt nổi (5 báo thức + thấy app bên dưới)
 
     private fun showOverlaySettings() {
         if (overlaySettings != null) return
@@ -511,7 +528,7 @@ class ClockService : Service() {
         val scroll = ScrollView(themed).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (dm.heightPixels * 0.46f).toInt()
+                (dm.heightPixels * 0.52f).toInt()
             ).apply { topMargin = dp(10f) }
             overScrollMode = View.OVER_SCROLL_NEVER
         }
@@ -587,60 +604,181 @@ class ClockService : Service() {
         body.addView(tvColor)
         body.addView(colorRow)
 
-        val swAlarm = MaterialSwitch(themed).apply {
-            isChecked = prefs.alarmOn
-            setOnCheckedChangeListener { _, on ->
-                prefs.alarmOn = on
-                scheduleAlarm(this@ClockService)
-            }
-        }
-        body.addView(makeSwitchRow("Báo thức nhấp nháy", swAlarm))
+        val alarms = prefs.getAlarms()
 
-        val tvTime = TextView(themed).apply {
-            text = "Giờ hẹn: %02d:%02d".format(prefs.alarmH, prefs.alarmM)
-            setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setPadding(dp(12f), dp(10f), dp(12f), dp(10f))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(14f).toFloat()
-                setColor(0x18FFFFFF)
-                setStroke(dp(1f), 0x33FFFFFF)
-            }
-            setOnClickListener { openOverlayTimePicker(this) }
-        }
-        body.addView(tvTime)
-
-        val etNote = EditText(themed).apply {
+        val alarmHeader = LinearLayout(themed).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(8f) }
-            hint = "Ghi chú nhắc việc..."
-            setHintTextColor(0x99FFFFFF.toInt())
-            setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setText(prefs.note)
-            setPadding(dp(12f), dp(10f), dp(12f), dp(10f))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(14f).toFloat()
-                setColor(0x18FFFFFF)
-                setStroke(dp(1f), 0x33FFFFFF)
-            }
-            addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
-                override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(s: Editable?) {
-                    prefs.note = s?.toString() ?: ""
-                }
-            })
+            ).apply { topMargin = dp(12f) }
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        body.addView(etNote)
+        val tvAlarmTitle = TextView(themed).apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            text = "Báo thức nhấp nháy (${alarms.size}/${Prefs.MAX_ALARMS})"
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        val btnAddAlarm = TextView(themed).apply {
+            text = "+ Thêm"
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setPadding(dp(12f), dp(6f), dp(12f), dp(6f))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(12f).toFloat()
+                setColor(0x28FFFFFF)
+                setStroke(dp(1f), 0x44FFFFFF)
+            }
+        }
+        alarmHeader.addView(tvAlarmTitle)
+        alarmHeader.addView(btnAddAlarm)
+        body.addView(alarmHeader)
+
+        val alarmsContainer = LinearLayout(themed).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        body.addView(alarmsContainer)
+
+        fun renderAlarmList() {
+            alarmsContainer.removeAllViews()
+            tvAlarmTitle.text = "Báo thức nhấp nháy (${alarms.size}/${Prefs.MAX_ALARMS})"
+            btnAddAlarm.alpha = if (alarms.size < Prefs.MAX_ALARMS) 1f else 0.45f
+
+            if (alarms.isEmpty()) {
+                val emptyTv = TextView(themed).apply {
+                    text = "Chưa có báo thức nào. Bấm \"+ Thêm\" để tạo (tối đa 5)."
+                    setTextColor(0xB3FFFFFF.toInt())
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setPadding(0, dp(6f), 0, dp(4f))
+                }
+                alarmsContainer.addView(emptyTv)
+                return
+            }
+
+            alarms.forEachIndexed { index, item ->
+                val card = LinearLayout(themed).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { topMargin = dp(8f) }
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(12f), dp(8f), dp(12f), dp(10f))
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(16f).toFloat()
+                        setColor(0x18FFFFFF)
+                        setStroke(dp(1f), 0x33FFFFFF)
+                    }
+                }
+
+                val topRow = LinearLayout(themed).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+
+                val tvClock = TextView(themed).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    text = "#${index + 1} · %02d:%02d".format(item.hour, item.minute)
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    setOnClickListener {
+                        openOverlayTimePicker(item.hour, item.minute) { h, m ->
+                            item.hour = h
+                            item.minute = m
+                            text = "#${index + 1} · %02d:%02d".format(h, m)
+                            prefs.saveAlarms(alarms)
+                            scheduleAlarm(this@ClockService)
+                        }
+                    }
+                }
+
+                val swItem = MaterialSwitch(themed).apply {
+                    isChecked = item.enabled
+                    setOnCheckedChangeListener { _, on ->
+                        item.enabled = on
+                        prefs.saveAlarms(alarms)
+                        scheduleAlarm(this@ClockService)
+                    }
+                }
+
+                val btnDel = TextView(themed).apply {
+                    text = "✕"
+                    setTextColor(0xCCFF8A80.toInt())
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    setPadding(dp(10f), dp(4f), dp(4f), dp(4f))
+                    setOnClickListener {
+                        alarms.removeAt(index)
+                        prefs.saveAlarms(alarms)
+                        scheduleAlarm(this@ClockService)
+                        renderAlarmList()
+                    }
+                }
+
+                topRow.addView(tvClock)
+                topRow.addView(swItem)
+                topRow.addView(btnDel)
+                card.addView(topRow)
+
+                val etItemNote = EditText(themed).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply { topMargin = dp(4f) }
+                    hint = "Ghi chú báo thức #${index + 1}..."
+                    setHintTextColor(0x88FFFFFF.toInt())
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setText(item.note)
+                    setPadding(dp(10f), dp(7f), dp(10f), dp(7f))
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(10f).toFloat()
+                        setColor(0x14FFFFFF)
+                    }
+                    addTextChangedListener(object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+                        override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+                        override fun afterTextChanged(s: Editable?) {
+                            item.note = s?.toString() ?: ""
+                            prefs.saveAlarms(alarms)
+                        }
+                    })
+                }
+                card.addView(etItemNote)
+                alarmsContainer.addView(card)
+            }
+        }
+
+        btnAddAlarm.setOnClickListener {
+            if (alarms.size >= Prefs.MAX_ALARMS) {
+                Toast.makeText(this, "Đã đạt tối đa 5 báo thức", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val now = Calendar.getInstance()
+            val defaultH = now.get(Calendar.HOUR_OF_DAY)
+            val defaultM = (now.get(Calendar.MINUTE) + 5) % 60
+            alarms.add(
+                AlarmItem(
+                    id = UUID.randomUUID().toString().take(8),
+                    enabled = true,
+                    hour = defaultH,
+                    minute = defaultM,
+                    note = ""
+                )
+            )
+            prefs.saveAlarms(alarms)
+            scheduleAlarm(this)
+            renderAlarmList()
+        }
+
+        renderAlarmList()
 
         val btnFull = TextView(themed).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(12f) }
+            ).apply { topMargin = dp(14f) }
             text = "Mở trang đầy đủ (HyperOS / OTA)"
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
@@ -677,7 +815,7 @@ class ClockService : Service() {
         ).apply {
             val clockOnTop = (chipLp?.y ?: 0) < dm.heightPixels / 2
             gravity = (if (clockOnTop) Gravity.BOTTOM else Gravity.TOP) or Gravity.CENTER_HORIZONTAL
-            y = dp(48f)
+            y = dp(44f)
             if (Build.VERSION.SDK_INT >= 31 && wm.isCrossWindowBlurEnabled) {
                 this.flags = this.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
                 blurBehindRadius = 24
@@ -717,18 +855,12 @@ class ClockService : Service() {
         }
     }
 
-    private fun openOverlayTimePicker(targetView: TextView) {
-        val wrapper = FrameLayout(themed)
+    private fun openOverlayTimePicker(initH: Int, initM: Int, onPicked: (Int, Int) -> Unit) {
         val dialog = TimePickerDialog(
             themed,
-            { _, h, m ->
-                prefs.alarmH = h
-                prefs.alarmM = m
-                targetView.text = "Giờ hẹn: %02d:%02d".format(h, m)
-                scheduleAlarm(this)
-            },
-            prefs.alarmH,
-            prefs.alarmM,
+            { _, h, m -> onPicked(h, m) },
+            initH,
+            initM,
             true
         )
         dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
@@ -741,7 +873,6 @@ class ClockService : Service() {
             Log.w(TAG, "Không mở được TimePicker overlay cho $comp", e)
             Toast.makeText(this, "Mở trang đầy đủ để chọn giờ báo thức", Toast.LENGTH_SHORT).show()
         }
-        wrapper.removeAllViews()
     }
 
     private fun hideOverlaySettings() {
@@ -796,18 +927,25 @@ class ClockService : Service() {
                 Intent(ctx, ClockReceiver::class.java).setAction(ACTION_ALARM),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            if (!p.alarmOn) {
+
+            val enabledAlarms = p.getAlarms().filter { it.enabled }
+            if (enabledAlarms.isEmpty()) {
                 am.cancel(pi)
                 return
             }
-            val cal = Calendar.getInstance().apply {
-                set(Calendar.HOUR_OF_DAY, p.alarmH)
-                set(Calendar.MINUTE, p.alarmM)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-                if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+
+            val nowMs = System.currentTimeMillis()
+            val nextTriggerMs = enabledAlarms.minOf { item ->
+                Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, item.hour)
+                    set(Calendar.MINUTE, item.minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                    if (timeInMillis <= nowMs) add(Calendar.DAY_OF_YEAR, 1)
+                }.timeInMillis
             }
-            setWake(ctx, am, cal.timeInMillis, pi)
+
+            setWake(ctx, am, nextTriggerMs, pi)
         }
 
         fun scheduleRestart(ctx: Context, delayMs: Long = 1_500) {

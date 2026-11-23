@@ -1,19 +1,44 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
 
-// Có thể ghi đè bằng -PghOwner=... -PghRepo=... -PappVersion=... -PappCode=...
-// (GitHub Actions tự truyền các giá trị này, nên OTA tự khớp với repo của bạn)
-fun prop(name: String, def: String): String = providers.gradleProperty(name).orNull ?: def
+// Ghi đè qua -PghOwner=... -PghRepo=... -PappVersion=... -PappCode=...
+fun prop(name: String, def: String): String =
+    providers.gradleProperty(name).orNull?.trim()?.takeIf { it.isNotEmpty() } ?: def
 
-val keystorePath: String? = System.getenv("KEYSTORE_PATH")
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) {
+        f.inputStream().use { load(it) }
+    }
+}
+
+fun secretOrProp(envKey: String, propKey: String = envKey): String? =
+    System.getenv(envKey)?.takeIf { it.isNotBlank() }
+        ?: localProps.getProperty(propKey)?.trim()?.takeIf { it.isNotEmpty() }
+
+val resolvedKeystorePath: String? =
+    secretOrProp("KEYSTORE_PATH", "keystore.path")
+        ?: rootProject.file("release.jks").takeIf { it.exists() }?.absolutePath
+
+val resolvedStorePassword: String? = secretOrProp("KEYSTORE_PASSWORD", "keystore.password")
+val resolvedKeyAlias: String? = secretOrProp("KEY_ALIAS", "key.alias")
+val resolvedKeyPassword: String? = secretOrProp("KEY_PASSWORD", "key.password")
+
+val hasReleaseSigning = resolvedKeystorePath != null &&
+        !resolvedStorePassword.isNullOrBlank() &&
+        !resolvedKeyAlias.isNullOrBlank() &&
+        !resolvedKeyPassword.isNullOrBlank()
+
+val parsedVersionCode = prop("appCode", "1").toIntOrNull()?.coerceAtLeast(1) ?: 1
+val parsedVersionName = prop("appVersion", "1.0.0")
+val ghOwner = prop("ghOwner", "dhaskhffouf")
+val ghRepo = prop("ghRepo", "FloatingClock")
 
 android {
-    lint {
-        checkReleaseBuilds = false
-        abortOnError = false
-    }
     namespace = "com.minhthai.floatclock"
     compileSdk = 35
 
@@ -21,20 +46,20 @@ android {
         applicationId = "com.minhthai.floatclock"
         minSdk = 26
         targetSdk = 35
-        versionCode = prop("appCode", "1").toInt()
-        versionName = prop("appVersion", "1.0.0")
+        versionCode = parsedVersionCode
+        versionName = parsedVersionName
 
-        buildConfigField("String", "GITHUB_OWNER", "\"${prop("ghOwner", "YOUR_GITHUB_USERNAME")}\"")
-        buildConfigField("String", "GITHUB_REPO", "\"${prop("ghRepo", "FloatingClock")}\"")
+        buildConfigField("String", "GITHUB_OWNER", "\"$ghOwner\"")
+        buildConfigField("String", "GITHUB_REPO", "\"$ghRepo\"")
     }
 
     signingConfigs {
-        if (keystorePath != null) {
+        if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+                storeFile = file(resolvedKeystorePath!!)
+                storePassword = resolvedStorePassword
+                keyAlias = resolvedKeyAlias
+                keyPassword = resolvedKeyPassword
             }
         }
     }
@@ -47,7 +72,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = if (keystorePath != null) {
+            signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
@@ -57,6 +82,11 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     compileOptions {

@@ -1,72 +1,78 @@
 package com.minhthai.floatclock
 
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.util.TypedValue
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.graphics.ColorUtils
 
-/** Vẽ hàng chấm màu (dùng chung cho màn hình cài đặt và bảng chỉnh nhanh trên đồng hồ). */
 object Swatches {
+    val PALETTE: List<Pair<String, Int>> = listOf(
+        "Trắng" to Color.WHITE,
+        "Đen" to Color.BLACK,
+        "Đỏ san hô" to Color.parseColor("#FF6B6B"),
+        "Vàng" to Color.parseColor("#FFD166"),
+        "Xanh ngọc" to Color.parseColor("#06D6A0"),
+        "Xanh dương" to Color.parseColor("#4EA8DE"),
+        "Tím nhạt" to Color.parseColor("#C77DFF")
+    )
 
     fun render(
-        container: LinearLayout,
-        selected: Int,
-        sizeDp: Int = 44,
+        parent: LinearLayout,
+        selectedColor: Int,
+        sizeDp: Int = 36,
         onPick: (Int) -> Unit,
         onCustom: (() -> Unit)? = null
     ) {
-        container.removeAllViews()
-        val d = container.resources.displayMetrics.density
-        val size = (sizeDp * d).toInt()
-        val margin = (6 * d).toInt()
+        parent.removeAllViews()
+        val ctx = parent.context
+        val density = ctx.resources.displayMetrics.density
+        val px = (sizeDp * density).toInt()
+        val margin = (6 * density).toInt()
+        val strokePx = maxOf(1, (2 * density).toInt())
 
-        val colors = Prefs.PALETTE.toMutableList()
-        if (selected !in colors) colors.add(0, selected) // màu tuỳ chọn hiện đầu hàng
-
-        for (c in colors) {
-            val isSel = c == selected
-            val dot = TextView(container.context).apply {
-                layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                    setMargins(margin, margin, margin, margin)
+        for ((label, colorInt) in PALETTE) {
+            val isSelected = colorInt == selectedColor
+            val item = TextView(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(px, px).apply {
+                    marginEnd = margin
                 }
                 gravity = Gravity.CENTER
-                text = if (isSel) "✓" else ""
-                typeface = Typeface.DEFAULT_BOLD
-                textSize = 18f
-                setTextColor(if (ColorUtils.calculateLuminance(c) > 0.5) Color.BLACK else Color.WHITE)
+                contentDescription = label
+                text = if (isSelected) "✓" else ""
+                setTextColor(if (isSelected) Color.BLACK else Color.TRANSPARENT)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    setColor(c)
-                    setStroke((1.5f * d).toInt(), 0x88FFFFFF.toInt())
+                    setColor(colorInt)
+                    setStroke(strokePx, if (isSelected) Color.WHITE else 0x55FFFFFF)
                 }
                 setOnClickListener {
-                    onPick(c)
-                    render(container, c, sizeDp, onPick, onCustom)
+                    onPick(colorInt)
+                    render(parent, colorInt, sizeDp, onPick, onCustom)
                 }
             }
-            container.addView(dot)
+            parent.addView(item)
         }
 
         if (onCustom != null) {
-            val plus = TextView(container.context).apply {
-                layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                    setMargins(margin, margin, margin, margin)
-                }
+            val isCustom = PALETTE.none { it.second == selectedColor }
+            val customBtn = TextView(ctx).apply {
+                layoutParams = LinearLayout.LayoutParams(px, px)
                 gravity = Gravity.CENTER
-                text = "+"
-                textSize = 24f
+                contentDescription = "Màu tùy chỉnh"
+                text = if (isCustom) "✓" else "+"
                 setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    setColor(0x22FFFFFF)
-                    setStroke((1.5f * d).toInt(), 0xAAFFFFFF.toInt())
+                    setColor(if (isCustom) selectedColor else 0x22FFFFFF)
+                    setStroke(strokePx, if (isCustom) Color.WHITE else 0x66FFFFFF)
                 }
                 setOnClickListener { onCustom() }
             }
-            container.addView(plus)
+            parent.addView(customBtn)
         }
     }
 }
