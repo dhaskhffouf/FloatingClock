@@ -47,16 +47,25 @@ jobs:
 
       - name: Build APK release
         env:
+          KEYSTORE_PATH: ${{ env.KEYSTORE_PATH }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          gradle assembleRelease --no-daemon \
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon \
             -PghOwner="${{ github.repository_owner }}" \
             -PghRepo="${{ github.event.repository.name }}" \
-            -PappVersion="$APP_VERSION" \
+            -PappVersion="${{ env.APP_VERSION }}" \
             -PappCode="${{ github.run_number }}"
-          cp app/build/outputs/apk/release/app-release.apk "FloatingClock-${APP_VERSION}.apk"
+
+          APK_SRC="app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$APK_SRC" ]; then
+            echo "::error::Không tìm thấy $APK_SRC. Kiểm tra lại cấu hình signingConfigs release."
+            ls -la app/build/outputs/apk/release/ || true
+            exit 1
+          fi
+          cp "$APK_SRC" "FloatingClock-${{ env.APP_VERSION }}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
