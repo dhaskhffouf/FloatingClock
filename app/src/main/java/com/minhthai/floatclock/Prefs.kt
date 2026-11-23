@@ -29,6 +29,10 @@ class Prefs(ctx: Context) {
         get() = sp.getInt(K_OPACITY, 90)
         set(v) = sp.edit().putInt(K_OPACITY, v).apply()
 
+    var glassAlpha: Int
+        get() = sp.getInt(K_GLASS_ALPHA, 65)
+        set(v) = sp.edit().putInt(K_GLASS_ALPHA, v.coerceIn(20, 100)).apply()
+
     var color: Int
         get() = sp.getInt(K_COLOR, Color.WHITE)
         set(v) = sp.edit().putInt(K_COLOR, v).apply()
@@ -169,6 +173,7 @@ class Prefs(ctx: Context) {
         const val K_ENABLED = "enabled"
         const val K_SIZE = "size"
         const val K_OPACITY = "opacity"
+        const val K_GLASS_ALPHA = "glass_alpha"
         const val K_COLOR = "color"
         const val K_SECONDS = "seconds"
         const val K_BLUR = "blur"

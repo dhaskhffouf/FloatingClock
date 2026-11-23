@@ -148,10 +148,11 @@ class ClockService : Service() {
     // ------------------------------------------------------------------ Foreground
 
     private fun startAsForeground() {
+        val appName = getString(R.string.app_name)
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Đồng hồ nổi", NotificationManager.IMPORTANCE_LOW).apply {
+                NotificationChannel(CHANNEL_ID, appName, NotificationManager.IMPORTANCE_LOW).apply {
                     setShowBadge(false)
                 }
             )
@@ -166,7 +167,7 @@ class ClockService : Service() {
         )
         val n: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notif)
-            .setContentTitle("Đồng hồ nổi đang chạy")
+            .setContentTitle("$appName đang chạy")
             .setContentText("Nhấn giữ đồng hồ để chỉnh nhanh · by Minh Thái")
             .setContentIntent(open)
             .addAction(0, "Tắt", stop)
@@ -187,6 +188,19 @@ class ClockService : Service() {
 
     private fun dp(v: Float) = (v * dm.density).toInt()
 
+    private fun applyGlassBackground(view: View, cornerDp: Float, alphaPct: Int) {
+        val alphaInt = (alphaPct * 255 / 100).coerceIn(35, 235)
+        val bg = view.background as? GradientDrawable ?: GradientDrawable().also {
+            view.background = it
+        }
+        bg.cornerRadius = dp(cornerDp).toFloat()
+        bg.setColor(ColorUtils.setAlphaComponent(0x181C28.toInt(), alphaInt))
+        bg.setStroke(
+            dp(1f),
+            ColorUtils.setAlphaComponent(Color.WHITE, (alphaInt * 0.65f).toInt().coerceIn(45, 190))
+        )
+    }
+
     private fun ensureChip() {
         if (chip != null) {
             applyStyle()
@@ -196,11 +210,7 @@ class ClockService : Service() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(18f), dp(8f), dp(18f), dp(8f))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(22f).toFloat()
-                setColor(0x1AFFFFFF)
-                setStroke(dp(1f), 0x38FFFFFF)
-            }
+            background = GradientDrawable()
         }
         val time = TextClock(themed).apply {
             layoutParams = LinearLayout.LayoutParams(
@@ -251,6 +261,8 @@ class ClockService : Service() {
         val nv = noteView ?: return
         val c = chip ?: return
 
+        applyGlassBackground(c, 22f, prefs.glassAlpha)
+
         val alpha = (prefs.opacity * 255 / 100).coerceIn(51, 255)
         val color = ColorUtils.setAlphaComponent(prefs.color, alpha)
         val size = prefs.size.toFloat()
@@ -276,17 +288,14 @@ class ClockService : Service() {
             lp.height = WindowManager.LayoutParams.WRAP_CONTENT
             lp.x = lp.x.coerceIn(0, max(0, dm.widthPixels - c.width))
             lp.y = lp.y.coerceIn(0, max(0, dm.heightPixels - c.height))
-            applyBlur(lp, prefs.blur)
+            clearBlur(lp)
             runCatching { wm.updateViewLayout(c, lp) }
         }
     }
 
-    private fun applyBlur(lp: WindowManager.LayoutParams, on: Boolean) {
-        if (Build.VERSION.SDK_INT < 31) return
-        if (on && wm.isCrossWindowBlurEnabled) {
-            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-            lp.blurBehindRadius = 24
-        } else {
+    /** Không làm mờ toàn màn hình phía sau khi điều chỉnh. */
+    private fun clearBlur(lp: WindowManager.LayoutParams) {
+        if (Build.VERSION.SDK_INT >= 31) {
             lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
             lp.blurBehindRadius = 0
         }
@@ -415,7 +424,10 @@ class ClockService : Service() {
         hideOverlaySettings()
         val v = LayoutInflater.from(themed).inflate(R.layout.panel_clock, null)
 
-        v.findViewById<TextView>(R.id.tvPanelCredit).text = "by Minh Thái · v${BuildConfig.VERSION_NAME}"
+        val appName = getString(R.string.app_name)
+        v.findViewById<TextView>(R.id.tvPanelAppName).text = appName
+        v.findViewById<TextView>(R.id.tvPanelCredit).text = "$appName · v${BuildConfig.VERSION_NAME}"
+        applyGlassBackground(v, 20f, prefs.glassAlpha)
 
         val tvSize = v.findViewById<TextView>(R.id.tvPanelSize)
         val sSize = v.findViewById<Slider>(R.id.sliderPanelSize)
@@ -432,17 +444,31 @@ class ClockService : Service() {
         val tvOp = v.findViewById<TextView>(R.id.tvPanelOpacity)
         val sOp = v.findViewById<Slider>(R.id.sliderPanelOpacity)
         sOp.value = prefs.opacity.toFloat().coerceIn(20f, 100f)
-        tvOp.text = "Độ đậm: ${prefs.opacity}%"
+        tvOp.text = "Độ đậm chữ: ${prefs.opacity}%"
         sOp.addOnChangeListener { _, value, fromUser ->
             if (fromUser) {
                 prefs.opacity = value.toInt()
-                tvOp.text = "Độ đậm: ${value.toInt()}%"
+                tvOp.text = "Độ đậm chữ: ${value.toInt()}%"
+                bumpPanelTimer()
+            }
+        }
+
+        val tvGlass = v.findViewById<TextView>(R.id.tvPanelGlass)
+        val sGlass = v.findViewById<Slider>(R.id.sliderPanelGlass)
+        sGlass.value = prefs.glassAlpha.toFloat().coerceIn(20f, 100f)
+        tvGlass.text = "Độ trong kính: ${prefs.glassAlpha}%"
+        sGlass.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                prefs.glassAlpha = value.toInt()
+                tvGlass.text = "Độ trong kính: ${value.toInt()}%"
+                applyGlassBackground(v, 20f, prefs.glassAlpha)
+                chip?.let { applyGlassBackground(it, 22f, prefs.glassAlpha) }
                 bumpPanelTimer()
             }
         }
 
         val colors = v.findViewById<LinearLayout>(R.id.panelColors)
-        Swatches.render(colors, prefs.color, 38, onPick = {
+        Swatches.render(colors, prefs.color, 30, onPick = {
             prefs.color = it
             bumpPanelTimer()
         })
@@ -457,8 +483,15 @@ class ClockService : Service() {
         }
         v.findViewById<View>(R.id.btnPanelClose).setOnClickListener { hidePanel() }
 
+        val isLandscape = dm.widthPixels > dm.heightPixels
+        val panelWidth = if (isLandscape) {
+            (dm.widthPixels * 0.50f).toInt()
+        } else {
+            (dm.widthPixels * 0.72f).toInt()
+        }
+
         val lp = WindowManager.LayoutParams(
-            (dm.widthPixels * 0.9f).toInt(),
+            panelWidth,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -467,11 +500,8 @@ class ClockService : Service() {
         )
         val clockOnTop = (chipLp?.y ?: 0) < dm.heightPixels / 2
         lp.gravity = (if (clockOnTop) Gravity.BOTTOM else Gravity.TOP) or Gravity.CENTER_HORIZONTAL
-        lp.y = dp(56f)
-        if (Build.VERSION.SDK_INT >= 31 && wm.isCrossWindowBlurEnabled) {
-            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-            lp.blurBehindRadius = 24
-        }
+        lp.y = if (isLandscape) dp(16f) else dp(32f)
+        clearBlur(lp)
 
         runCatching { wm.addView(v, lp) }
             .onSuccess {
@@ -509,7 +539,7 @@ class ClockService : Service() {
         }
         val title = TextView(themed).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            text = "Cài đặt đồng hồ nổi"
+            text = "Cài đặt ${getString(R.string.app_name)}"
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -816,10 +846,7 @@ class ClockService : Service() {
             val clockOnTop = (chipLp?.y ?: 0) < dm.heightPixels / 2
             gravity = (if (clockOnTop) Gravity.BOTTOM else Gravity.TOP) or Gravity.CENTER_HORIZONTAL
             y = dp(44f)
-            if (Build.VERSION.SDK_INT >= 31 && wm.isCrossWindowBlurEnabled) {
-                this.flags = this.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-                blurBehindRadius = 24
-            }
+            clearBlur(this)
         }
 
         runCatching { wm.addView(container, lp) }
