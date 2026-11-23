@@ -45,6 +45,10 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean(K_BLUR, false)
         set(v) = sp.edit().putBoolean(K_BLUR, v).apply()
 
+    var alarmSound: Boolean
+        get() = sp.getBoolean(K_ALARM_SOUND, true)
+        set(v) = sp.edit().putBoolean(K_ALARM_SOUND, v).apply()
+
     var x: Int
         get() = sp.getInt(K_X, -1)
         set(v) = sp.edit().putInt(K_X, v).apply()
@@ -177,6 +181,7 @@ class Prefs(ctx: Context) {
         const val K_COLOR = "color"
         const val K_SECONDS = "seconds"
         const val K_BLUR = "blur"
+        const val K_ALARM_SOUND = "alarm_sound"
         const val K_X = "x"
         const val K_Y = "y"
         const val K_LAST_CHECK = "last_check"
